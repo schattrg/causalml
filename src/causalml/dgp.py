@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 def generate_grouped_data(num_units=20, num_periods=50, treatment_start_period=40, treatment_effect=-0.05,
-                          num_covariates=3, num_treated_units=5, base_trend_slope=0.0, parallel_trends=True):
+                          num_covariates=3, num_treated_units=5,base_time_trend=0.05, parallel_trends=True):
     
     if num_treated_units > num_units:
         raise ValueError("The number of treated units cannot exceed the total number of units.")
@@ -35,22 +35,23 @@ def generate_grouped_data(num_units=20, num_periods=50, treatment_start_period=4
     # Adding fixed effects
     data['unit_effect'] = data['unit'].map(dict(zip(states, unit_effects)))
     data['time_effect'] = data['time'].map(dict(zip(periods, time_effects)))
-    
-    # Optional unit-specific trends
-    if parallel_trends:
-        # Apply a small random variation to the base trend slope for each unit
-        unit_trend_variations = np.random.normal(loc=base_trend_slope, scale=0.00, size=num_units)
-    else:
-        # Apply larger variations to create noticeable divergences in trends
-        unit_trend_variations = np.random.normal(loc=base_trend_slope, scale=base_trend_slope*2, size=num_units)
-    
-    data['unit_trend'] = data['unit'].map(dict(zip(states, unit_trend_variations)))
 
+    # Time trend
+    if parallel_trends:
+        time_trend = np.arange(num_periods) * base_time_trend
+        data['time_trend'] = data['time'].map(dict(zip(periods, time_trend)))
+    else:
+        treated_trend = np.arange(num_periods) * base_time_trend
+        control_trend = np.arange(num_periods) * base_time_trend / 2
+        data['time_trend'] = np.where(data['treated_unit'], 
+                                      data['time'].map(dict(zip(periods, treated_trend))),
+                                      data['time'].map(dict(zip(periods, control_trend))))
+        
     # Simulate outcome variable Y_it with unit-specific linear trends
     outcome_model = (data['unit_effect'] +
                      data['time_effect'] +
-                     data['treatment'] * treatment_effect +
-                     data['unit_trend'] * data['time'])
+                     data['time_trend'] +
+                     data['treatment'] * treatment_effect)
     
     for i in range(1, num_covariates + 1):
         outcome_model += data[f'X{i}'] * np.random.uniform(-0.1, 0.1)
