@@ -16,7 +16,7 @@ git checkout -b new_branch_name
 
 * When it is time to commit
 ```
-git add .ß
+git add .
 git commit -m "message"
 git push origin new_branch_name
 ```
