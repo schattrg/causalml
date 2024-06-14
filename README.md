@@ -3,18 +3,17 @@
 Task 1 for Pritha - Create a branch, delete this line, and create a PR and assign me as a reviewer
 
 ## github basics
-* update main branch
-```ß
+
+update local main branch
+```
 git checkout main
 git pull origin main
 ```
-* create a new branch
+create a new branch
 ```
 git checkout -b new_branch_name
 ```
-* Do your work
-
-* When it is time to commit
+Do your work, when it is time to commit
 ```
 git add .
 git commit -m "message"
