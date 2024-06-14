@@ -1,7 +1,5 @@
 # causalml
 
-Task 1 for Pritha - Create a branch, delete this line, and create a PR and assign me as a reviewer
-
 ## github 
 
 ### Basic Workflow
