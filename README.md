@@ -12,6 +12,14 @@ create a new branch
 ```
 git checkout -b new_branch_name
 ```
+git branch naming convention - 
+
+```
+feature/feature_name : f-featurename
+bugfix/bug_name : b-bugname
+exploratory/exploratory_name : e-exploratoryname
+```
+
 Do your work, when it is time to commit
 ```
 git add .
