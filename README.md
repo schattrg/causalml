@@ -38,3 +38,5 @@ git pull origin main
 git checkout new_branch_name
 git merge main
 ```
+
+### Setting
