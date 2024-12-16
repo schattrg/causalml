@@ -59,3 +59,49 @@ def generate_grouped_data(num_units=20, num_periods=50, treatment_start_period=4
     data['Y_it'] = outcome_model + np.random.normal(loc=0, scale=0.1, size=num_periods * num_units)
     
     return data
+
+
+def ab_test_dgp(
+        n_users, 
+        n_confounders, 
+        n_features,
+        homogeneous=False, 
+        endogenous=False, 
+        treatment_effect_func=lambda x: np.exp(2 * x[0]), 
+        seed=123):
+    
+    # Seed
+    np.random.seed(seed)
+
+    # Variables/Confounders
+    W = np.random.normal(0, 1, size=(n_users, n_confounders))
+
+    # Treatment Effect
+    X = W[:, np.random.choice(n_confounders, n_features, replace=False)]
+    TE = np.array([treatment_effect_func(x_i) for x_i in X])
+
+    if homogeneous:
+        TE = np.full_like(TE, TE.mean())
+
+    # Treatment Assignment
+    if endogenous:
+        beta = np.random.uniform(-1, 1, size=n_confounders)
+        eta = np.random.uniform(-1, 1, size=n_users)
+        treatment_prob = expit(np.dot(W, beta) + eta)
+        T = np.random.binomial(1, treatment_prob)
+    else:
+        T = np.random.binomial(1, 0.5, n_users)
+
+    # Outcome
+    coefs_y = np.random.uniform(0, 1, size=n_confounders)
+    epsilon_y = np.random.uniform(0, 1, size=n_users)
+    Y = TE * T + np.dot(W, coefs_y) + epsilon_y
+
+    # Dataframe
+    df = pd.DataFrame(W, columns=[f"W{i}" for i in range(1, n_confounders + 1)])
+    df['T'] = T
+    df['TE'] = TE 
+    df['Y'] = Y
+
+    return df
+    
