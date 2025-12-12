@@ -61,6 +61,127 @@ def generate_grouped_data(num_units=20, num_periods=50, treatment_start_period=4
     return data
 
 
+def generate_factor_panel(
+        num_units=30,
+        num_periods=60,
+        treatment_start_period=40,
+        treatment_effect=-0.05,
+        num_treated_units=10,
+        base_time_trend=0.02,
+        seed=42,
+        hetero_baseline=False,
+        hetero_treatment_effect=False,
+        non_stationary_errors=False,
+        structural_break=False):
+    """
+    Interacted fixed-effects factor model panel generator with treatment starting at a chosen period.
+
+    Parameters
+    ----------
+    num_units : int
+        Number of units/geos.
+    num_periods : int
+        Number of time periods.
+    treatment_start_period : int
+        First period where treated units switch on treatment.
+    treatment_effect : float
+        Baseline treatment effect (ATE/MDE) applied to treated units after start.
+    num_treated_units : int
+        Number of units assigned to treatment.
+    base_time_trend : float
+        Slope of deterministic time trend shared by all units.
+    seed : int
+        Random seed for reproducibility.
+    hetero_baseline : bool
+        If True, inflate variance of unit fixed effects to create large baseline gaps.
+    hetero_treatment_effect : bool
+        If True, draw unit-level treatment effects around the baseline effect.
+    non_stationary_errors : bool
+        If True, add a random-walk error component.
+    structural_break : bool
+        If True, add a global shock beginning at the treatment start (affects all units).
+
+    Returns
+    -------
+    pd.DataFrame
+        Panel data with columns: unit, time, treated_unit, treatment, Y_it, and latent drivers.
+    """
+    if num_treated_units > num_units:
+        raise ValueError("The number of treated units cannot exceed the total number of units.")
+
+    rng = np.random.default_rng(seed)
+
+    units = [f'{chr(65+i//26)}{chr(65+i%26)}' for i in range(num_units)]
+    periods = np.arange(num_periods)
+
+    data = pd.DataFrame({
+        'unit': np.repeat(units, num_periods),
+        'time': np.tile(periods, num_units),
+    })
+
+    treated_units = rng.choice(units, num_treated_units, replace=False)
+    data['treated_unit'] = data['unit'].isin(treated_units)
+    data['treatment'] = data['treated_unit'] & (data['time'] >= treatment_start_period)
+
+    # Unit fixed effects with optional large heterogeneity
+    unit_sd = 0.15 if hetero_baseline else 0.05
+    unit_effects = rng.normal(0, unit_sd, size=num_units)
+    data['unit_effect'] = data['unit'].map(dict(zip(units, unit_effects)))
+
+    # Deterministic time trend
+    time_trend = periods * base_time_trend
+    data['time_trend'] = data['time'].map(dict(zip(periods, time_trend)))
+
+    # Latent factors (interacted fixed effects)
+    num_factors = 2
+    loadings = rng.normal(0, 0.5, size=(num_units, num_factors))
+    factors = rng.normal(0, 1.0, size=(num_periods, num_factors))
+    for k in range(num_factors):
+        data[f'factor_loading_{k+1}'] = data['unit'].map(dict(zip(units, loadings[:, k])))
+        data[f'time_factor_{k+1}'] = data['time'].map(dict(zip(periods, factors[:, k])))
+
+    interacted_effect = sum(data[f'factor_loading_{k+1}'] * data[f'time_factor_{k+1}'] for k in range(num_factors))
+
+    # Treatment effects (heterogeneous if requested)
+    unit_te = np.full(num_units, treatment_effect)
+    if hetero_treatment_effect:
+        unit_te = rng.normal(loc=treatment_effect, scale=abs(treatment_effect) * 0.5 + 0.02, size=num_units)
+    data['unit_treatment_effect'] = data['unit'].map(dict(zip(units, unit_te)))
+
+    # Structural break affecting everyone from treatment start onward
+    global_shock = np.zeros(num_periods)
+    if structural_break:
+        post_horizon = num_periods - treatment_start_period
+        shock_path = rng.normal(0.1, 0.05, size=post_horizon)
+        global_shock[treatment_start_period:] = shock_path
+    data['global_shock'] = data['time'].map(dict(zip(periods, global_shock)))
+
+    # Error process: iid vs random walk
+    if non_stationary_errors:
+        innovations = rng.normal(0, 0.05, size=(num_units, num_periods))
+        errors = np.cumsum(innovations, axis=1)
+    else:
+        errors = rng.normal(0, 0.05, size=(num_units, num_periods))
+    error_lookup = {
+        unit: err_path
+        for unit, err_path in zip(units, errors)
+    }
+    data['epsilon'] = data.apply(lambda row: error_lookup[row['unit']][row['time']], axis=1)
+
+    outcome = (
+        data['unit_effect'] +
+        data['time_trend'] +
+        interacted_effect +
+        data['treatment'] * data['unit_treatment_effect'] +
+        data['global_shock'] +
+        data['epsilon']
+    )
+
+    data['Y_it'] = outcome
+
+    return data
+
+
 def ab_test_dgp(
         n_users, 
         n_confounders, 
